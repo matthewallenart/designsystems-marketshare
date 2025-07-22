@@ -15,6 +15,7 @@
             height: 100%;
             overflow: hidden;
             background: #000;
+            border: 8px solid #000;
         }
         
         .treemap-rect {
@@ -30,6 +31,8 @@
             width: 100vw;
             height: 100vh;
             display: block;
+            background: #000;
+            border: 8px solid #000;
         }
         
         #treemap-container {
@@ -71,12 +74,15 @@
 
         let hoveredSystem = null;
 
-        // Color scheme
+        // Color scheme (darkest for largest, lighter for smaller)
         function getSystemColor(usage) {
-            if (usage >= 20) return '#00D4FF'; // Cyan for dominant systems
-            if (usage >= 8) return '#FFD700';  // Gold for major systems  
-            if (usage >= 3) return '#FFA500';  // Orange for medium systems
-            return '#DAA520'; // Dark goldenrod for smaller systems
+            // Largest: #7c4dff, then #a085ff, #b39ddb, #d1c4e9, #ede7f6
+            if (usage >= 30) return '#7c4dff'; // Deep purple (largest)
+            if (usage >= 18) return '#a085ff'; // Lighter purple
+            if (usage >= 12) return '#b39ddb'; // Medium light purple
+            if (usage >= 8) return '#d1c4e9';  // Light purple
+            if (usage >= 3) return '#ede7f6';  // Very light purple
+            return '#f3e5f5'; // Faintest for smallest
         }
 
         // Calculate treemap layout for dynamic screen dimensions
@@ -173,7 +179,7 @@
         }
 
         // Create SVG rect element
-        function createSVGRect(x, y, width, height, fill, stroke = '#ffffff', strokeWidth = '4') {
+        function createSVGRect(x, y, width, height, fill, stroke = '#000000', strokeWidth = '4') {
             const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             rect.setAttribute('x', x);
             rect.setAttribute('y', y);
@@ -250,94 +256,71 @@
                     );
                     group.appendChild(usageText);
                 } else {
-                    // Hover view - Background
-                    const hoverBg = createSVGRect(
-                        system.x + 10,
-                        system.y + 10,
-                        system.width - 20,
-                        system.height - 20,
-                        'rgba(0,0,0,0.85)',
-                        'rgba(255,255,255,0.3)',
-                        '2'
-                    );
-                    hoverBg.setAttribute('rx', '12');
-                    hoverBg.style.pointerEvents = 'none';
-                    group.appendChild(hoverBg);
-                    
+                    // Vertically center hover content
+                    const centerY = system.y + system.height / 2;
                     // System name in hover
                     const hoverNameSize = system.width > 300 ? '28px' : system.width > 200 ? '20px' : system.width > 100 ? '16px' : '12px';
-                    const hoverName = createSVGText(
-                        system.x + system.width / 2,
-                        system.y + 50,
-                        system.name,
-                        hoverNameSize,
-                        'white',
-                        'bold'
-                    );
-                    group.appendChild(hoverName);
-                    
-                    // Usage Stats for larger cards
+                    // For large cards, stack all hover text vertically centered
                     if (system.width > 150 && system.height > 120) {
                         const statSize = system.width > 300 ? '18px' : system.width > 200 ? '14px' : '12px';
-                        const baseY = 80;
-                        
-                        const marketShare = createSVGText(
-                            system.x + system.width / 2,
-                            system.y + baseY,
-                            `Market Share: ${system.usage}%`,
-                            statSize,
-                            '#00D4FF'
-                        );
-                        group.appendChild(marketShare);
-                        
-                        const downloads = createSVGText(
-                            system.x + system.width / 2,
-                            system.y + baseY + 30,
-                            `Downloads: ${system.downloads}`,
-                            statSize,
-                            '#FFD700'
-                        );
-                        group.appendChild(downloads);
-                        
-                        const companies = createSVGText(
-                            system.x + system.width / 2,
-                            system.y + baseY + 60,
-                            `Used by: ${system.companies.slice(0, 2).join(', ')}`,
-                            system.width > 300 ? '16px' : system.width > 200 ? '12px' : '10px',
-                            '#FFA500'
-                        );
-                        group.appendChild(companies);
-                        
+                        let lines = [
+                            { text: system.name, size: hoverNameSize, weight: 'bold' },
+                            { text: `Market Share: ${system.usage}%`, size: statSize },
+                            { text: `Downloads: ${system.downloads}`, size: statSize },
+                            { text: `Used by: ${system.companies.slice(0, 2).join(', ')}`, size: system.width > 300 ? '16px' : system.width > 200 ? '12px' : '10px' }
+                        ];
                         if (system.width > 300 && system.height > 200 && system.companies.length > 2) {
-                            const moreCompanies = createSVGText(
-                                system.x + system.width / 2,
-                                system.y + baseY + 90,
-                                `+${system.companies.length - 2} more companies`,
-                                '14px',
-                                '#DAA520'
-                            );
-                            group.appendChild(moreCompanies);
+                            lines.push({ text: `+${system.companies.length - 2} more companies`, size: '14px' });
                         }
+                        // Calculate total height
+                        const lineHeight = 28;
+                        const totalHeight = lines.length * lineHeight;
+                        let startY = centerY - totalHeight / 2 + lineHeight / 2;
+                        lines.forEach((line, idx) => {
+                            const txt = createSVGText(
+                                system.x + system.width / 2,
+                                startY + idx * lineHeight,
+                                line.text,
+                                line.size,
+                                'black',
+                                line.weight || 'normal'
+                            );
+                            group.appendChild(txt);
+                        });
                     } else {
-                        // For smaller cards, show condensed stats
-                        const condensed = createSVGText(
+                        // For smaller cards, show name, then %, then 'Used by: company', all vertically centered
+                        const nameFontSize = system.width > 100 ? '16px' : '12px';
+                        const usageFontSize = system.width > 100 ? '16px' : '12px';
+                        const companyFontSize = system.width > 100 ? '12px' : '10px';
+                        // Calculate vertical positions
+                        const lineHeight = 22;
+                        const startY = centerY - lineHeight;
+                        const nameText = createSVGText(
                             system.x + system.width / 2,
-                            system.y + system.height / 2,
-                            `${system.usage}%`,
-                            system.width > 100 ? '16px' : '12px',
-                            '#00D4FF',
+                            startY,
+                            system.name,
+                            nameFontSize,
+                            'black',
                             'bold'
                         );
-                        group.appendChild(condensed);
-                        
-                        const company = createSVGText(
+                        group.appendChild(nameText);
+                        const usageText = createSVGText(
                             system.x + system.width / 2,
-                            system.y + system.height / 2 + 25,
-                            system.companies[0],
-                            system.width > 100 ? '12px' : '10px',
-                            'white'
+                            startY + lineHeight,
+                            `${system.usage}%`,
+                            usageFontSize,
+                            'black',
+                            'bold'
                         );
-                        group.appendChild(company);
+                        group.appendChild(usageText);
+                        const companyText = createSVGText(
+                            system.x + system.width / 2,
+                            startY + lineHeight * 2,
+                            `Used by: ${system.companies[0]}`,
+                            companyFontSize,
+                            'black'
+                        );
+                        group.appendChild(companyText);
                     }
                 }
                 
